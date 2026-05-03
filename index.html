@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>3D Transformation Visualizer</title>
+<meta name="description" content="Explore 3D transformations — Translation, Rotation, Scaling, Reflection and Projection — through real-time immersive interactive demos."/>
+<link rel="stylesheet" href="ui.css"/>
+<style>
+/* HOME-SPECIFIC OVERLAY */
+.hero-overlay{
+  position:fixed;inset:0;z-index:400;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  pointer-events:none;
+  padding-top:54px;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(0,229,255,.10);border:1px solid rgba(0,229,255,.30);
+  color:#00e5ff;font-size:.64rem;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;
+  padding:5px 16px;border-radius:999px;margin-bottom:22px;
+}
+.hero-badge::before{content:'';width:7px;height:7px;border-radius:50%;background:#00e5ff;box-shadow:0 0 10px #00e5ff;animation:blink 2s ease infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+.hero-title{
+  font-size:clamp(2.8rem,6vw,5.4rem);font-weight:800;
+  line-height:1.02;letter-spacing:-.04em;text-align:center;
+  color:#edf2ff;margin-bottom:18px;
+}
+.hero-title .grad{
+  background:linear-gradient(135deg,#00e5ff 0%,#7c6fff 50%,#ec4899 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:1rem;color:#8898b8;line-height:1.75;text-align:center;
+  max-width:520px;margin-bottom:44px;
+}
+/* Transformation cards */
+.cards-row{
+  display:flex;gap:14px;flex-wrap:wrap;justify-content:center;
+  max-width:900px;pointer-events:all;
+  margin-bottom:32px;
+}
+.xcard{
+  display:flex;flex-direction:column;gap:6px;
+  padding:14px 18px;border-radius:14px;text-decoration:none;
+  background:rgba(5,8,30,.72);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08);
+  transition:all .28s cubic-bezier(.34,1.46,.64,1);
+  min-width:140px;
+}
+.xcard:hover{transform:translateY(-5px);border-color:var(--xc);box-shadow:0 12px 40px rgba(0,0,0,.45),0 0 20px color-mix(in srgb,var(--xc) 30%,transparent);}
+.xcard-num{font-size:.58rem;font-family:'ui-monospace',monospace;color:#3a4a6e;font-weight:600;letter-spacing:.10em;}
+.xcard-icon{font-size:1.5rem;line-height:1;}
+.xcard-name{font-size:.84rem;font-weight:700;color:#edf2ff;}
+.xcard-tag{font-size:.68rem;color:#8898b8;}
+.xcard::after{content:'→';margin-top:auto;font-size:.78rem;font-weight:600;color:var(--xc);transition:transform .2s;}
+.xcard:hover::after{transform:translateX(4px);}
+.tc{--xc:#00e5ff;border-top:2px solid #00e5ff;}
+.tr{--xc:#a78bfa;border-top:2px solid #a78bfa;}
+.ts{--xc:#22c55e;border-top:2px solid #22c55e;}
+.trf{--xc:#ec4899;border-top:2px solid #ec4899;}
+.tp{--xc:#f97316;border-top:2px solid #f97316;}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link active">Home</a></li>
+    <li><a href="translation.html" class="nav-link">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link">Projection</a></li>
+  </ul>
+</nav>
+
+<div class="hero-overlay">
+  <div class="hero-badge">Interactive 3D Learning</div>
+  <h1 class="hero-title">3D <span class="grad">Transformation</span><br/>Visualizer</h1>
+  <p class="hero-sub">Explore core computer graphics transformations through a full-screen immersive 3D environment. Interact, rotate, and feel the math come alive.</p>
+  <div class="cards-row">
+    <a href="translation.html" class="xcard tc">
+      <span class="xcard-num">01</span>
+      <span class="xcard-icon">→</span>
+      <span class="xcard-name">Translation</span>
+      <span class="xcard-tag">Move in space</span>
+    </a>
+    <a href="rotation.html" class="xcard tr">
+      <span class="xcard-num">02</span>
+      <span class="xcard-icon">↻</span>
+      <span class="xcard-name">Rotation</span>
+      <span class="xcard-tag">Spin on axes</span>
+    </a>
+    <a href="scaling.html" class="xcard ts">
+      <span class="xcard-num">03</span>
+      <span class="xcard-icon">⤢</span>
+      <span class="xcard-name">Scaling</span>
+      <span class="xcard-tag">Resize objects</span>
+    </a>
+    <a href="reflection.html" class="xcard trf">
+      <span class="xcard-num">04</span>
+      <span class="xcard-icon">⧉</span>
+      <span class="xcard-name">Reflection</span>
+      <span class="xcard-tag">Mirror planes</span>
+    </a>
+    <a href="projection.html" class="xcard tp">
+      <span class="xcard-num">05</span>
+      <span class="xcard-icon">⊡</span>
+      <span class="xcard-name">Projection</span>
+      <span class="xcard-tag">Depth vs flat</span>
+    </a>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { createScene, glowCube } from './engine.js';
+
+// Home uses a multi-color accent — we override the grid manually
+const {scene} = createScene(document.getElementById('c'), {
+  accent: 0x6666ff,
+  onTick:(t)=>{
+    // Spin each orbit cluster slowly
+    clusters.forEach((g,i)=>{
+      g.rotation.y += .003 + i*.001;
+      g.children.forEach((c,j)=>{ if(j>0) { c.rotation.x+=.008+j*.002; c.rotation.y+=.006+j*.003; } });
+    });
+    rings.forEach((r,i)=>{ r.rotation.z+=.005*(i+1)*.4; r.rotation.y+=.002; });
+    // Color pulsing main cube materials
+    const pulse=.5+Math.sin(t*1.5)*.5;
+    homeColors.forEach((mat,i)=>{
+      mat.emissiveIntensity = 0.7 + pulse * .4;
+    });
+  }
+});
+
+// 5 mini-clusters, one per transformation, arranged in a ring
+const colors=[
+  {c:0x00e5ff,e:0x004466}, // translation — cyan
+  {c:0xa78bfa,e:0x330066}, // rotation — violet
+  {c:0x22c55e,e:0x004422}, // scaling — green
+  {c:0xec4899,e:0x660033}, // reflection — pink
+  {c:0xf97316,e:0x441100}, // projection — orange
+];
+const clusters=[], rings=[], homeColors=[];
+const R=5.5; // ring radius of cluster arrangement
+
+colors.forEach(({c,e},i)=>{
+  const ang=(i/5)*Math.PI*2 - Math.PI/2;
+  const g=new THREE.Group();
+  // Main mini cube
+  const cube=glowCube(1.1,c,e,.72);
+  g.add(cube);
+  cube.children.forEach(ch=>{ if(ch.material) homeColors.push(ch.material); });
+  // Satellites
+  [[1.8,0,0],[-1.8,0,0],[0,0,1.8]].forEach(([x,y,z])=>{
+    const s=glowCube(.4,c,e,.52);
+    s.position.set(x,y,z); g.add(s);
+  });
+  // Orbit ring
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(1.5,.04,8,70),
+    new THREE.MeshStandardMaterial({color:c,emissive:e,emissiveIntensity:1.2,transparent:true,opacity:.55})
+  );
+  ring.rotation.x=Math.PI/2; rings.push(ring); g.add(ring);
+
+  g.position.set(Math.cos(ang)*R, .5, Math.sin(ang)*R);
+  g.rotation.y=-ang;
+  scene.add(g); clusters.push(g);
+});
+
+// Central spinning polyhedron
+const centerGeo=new THREE.IcosahedronGeometry(1.2,1);
+const centerMat=new THREE.MeshStandardMaterial({
+  color:0x8888ff,emissive:0x2222aa,emissiveIntensity:1.2,
+  metalness:.6,roughness:.2,wireframe:false,transparent:true,opacity:.8
+});
+const center=new THREE.Mesh(centerGeo,centerMat);
+scene.add(center);
+const centerWire=new THREE.Mesh(centerGeo.clone(),
+  new THREE.MeshStandardMaterial({color:0xaaaaff,wireframe:true,transparent:true,opacity:.35}));
+scene.add(centerWire);
+
+// Connecting lines from center to each cluster
+colors.forEach(({c},i)=>{
+  const ang=(i/5)*Math.PI*2-Math.PI/2;
+  const pts=[new THREE.Vector3(0,0,0), new THREE.Vector3(Math.cos(ang)*R,.5,Math.sin(ang)*R)];
+  const line=new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:c,transparent:true,opacity:.22})
+  );
+  scene.add(line);
+});
+</script>
+</body>
+</html>

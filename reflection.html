@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Reflection — 3D Transformation Visualizer</title>
+<link rel="stylesheet" href="ui.css"/>
+<style>
+.plane-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.btn-plane{padding:6px 10px;border-radius:7px;border:1px solid rgba(236,72,153,.30);background:rgba(236,72,153,.08);color:#f472b6;font-size:.68rem;font-weight:600;cursor:pointer;transition:all .24s ease;}
+.btn-plane:hover{background:rgba(236,72,153,.18);}
+.btn-plane.on{background:rgba(236,72,153,.22);border-color:rgba(236,72,153,.55);box-shadow:0 0 14px rgba(236,72,153,.25);}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link">Home</a></li>
+    <li><a href="translation.html" class="nav-link">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link active">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link">Projection</a></li>
+  </ul>
+</nav>
+<div class="info-panel">
+  <div class="page-tag">04 — Reflection</div>
+  <h2 class="page-title" style="font-size:1.7rem">Mirror<br/><span style="background:linear-gradient(135deg,#ec4899,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Reflection</span></h2>
+  <p class="page-desc">Reflection creates a mirror image across a chosen plane. The object is duplicated and negated across the perpendicular axis.</p>
+  <div class="formula-chip" id="refl-formula">P&prime; = M<sub>yz</sub> &middot; P</div>
+</div>
+<div class="hud">
+  <div class="hud-item" style="color:#f472b6"><div class="hud-dot" style="background:#ec4899;box-shadow:0 0 6px #ec4899"></div>Plane: <span class="hud-val" id="hplane">YZ</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-y"><div class="hud-dot"></div>Ry: <span class="hud-val" id="hrot">0°</span></div>
+</div>
+<div class="controls">
+  <div class="ctrl-head">Mirror Plane</div>
+  <div class="plane-btns">
+    <button class="btn-plane on" data-plane="YZ" onclick="setPlane('YZ',this)">YZ <span style="opacity:.6;font-size:.60rem">x→-x</span></button>
+    <button class="btn-plane" data-plane="XZ" onclick="setPlane('XZ',this)">XZ <span style="opacity:.6;font-size:.60rem">y→-y</span></button>
+    <button class="btn-plane" data-plane="XY" onclick="setPlane('XY',this)">XY <span style="opacity:.6;font-size:.60rem">z→-z</span></button>
+  </div>
+  <div class="ctrl-head" style="margin-top:4px">Rotate Original</div>
+  <div class="ctrl-row"><span class="ax ax-y">Y°</span><input type="range" class="slider sl-y" id="roty" min="-180" max="180" value="0"/><span class="cval" id="rot-v">0°</span></div>
+  <div class="ctrl-row"><span class="ax ax-x">X°</span><input type="range" class="slider sl-x" id="rotx" min="-90" max="90" value="-18"/><span class="cval" id="rotx-v">-18°</span></div>
+  <div class="btn-row">
+    <button class="btn-r" onclick="resetRefl()">↺ Reset</button>
+    <button class="btn-a" style="border-color:rgba(236,72,153,.35);background:rgba(236,72,153,.12);color:#f472b6" id="spinBtn" onclick="toggleSpin()">⏵ Spin</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createScene, glowCube } from './engine.js';
+
+const D=Math.PI/180;
+let plane='YZ', spinning=false, spinA=0;
+
+const {scene} = createScene(document.getElementById('c'), {
+  accent:0xec4899, gridColor:0xec4899,
+  onTick:(t)=>{
+    rings.forEach((r,i)=>r.rotation.z+=.006*(i+1)*.5);
+    sats.forEach(s=>{s.rotation.x+=.01;s.rotation.y+=.008;});
+    reflSats.forEach(s=>{s.rotation.x-=.01;s.rotation.y-=.008;});
+    if(spinning){
+      spinA=(spinA+.5)%360;
+      document.getElementById('roty').value=spinA;
+      applyRot(spinA, +document.getElementById('rotx').value);
+    }
+    // Mirror plane shimmer
+    mirrorPlane.material.opacity=0.12+Math.sin(t*2)*.04;
+  }
+});
+
+// Helper: make pink reflected cube face material
+function glowCubePink(size,opacity=0.6){
+  const g=new THREE.Group();
+  const geo=new THREE.BoxGeometry(size,size,size);
+  g.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0xec4899,emissive:0x660033,emissiveIntensity:1.0,metalness:.5,roughness:.3,transparent:true,opacity})));
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0xf472b6,transparent:true,opacity:.9})));
+  return g;
+}
+
+// ORIGINAL cluster (cyan)
+const origGroup=new THREE.Group();
+const mainCube=glowCube(2.0,0x0088ff,0x0044aa,0.68);
+origGroup.add(mainCube);
+const sats=[];
+[[3.5,0,0],[0,3.5,0],[0,0,3.5],[-2,2,0]].forEach(([x,y,z])=>{
+  const s=glowCube(.6,0x00e5ff,0x003355,.55);
+  s.position.set(x,y,z); sats.push(s); origGroup.add(s);
+});
+const rings=[];
+[1.8,2.8].forEach((r,i)=>{
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(r,.05,8,80),
+    new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x004466,emissiveIntensity:1.1,transparent:true,opacity:.55})
+  );
+  ring.rotation.x=Math.PI/2+i*.5; rings.push(ring); origGroup.add(ring);
+});
+origGroup.position.set(3.5,0,0);
+scene.add(origGroup);
+
+// REFLECTED cluster (pink)
+const reflGroup=new THREE.Group();
+const reflMain=glowCubePink(2.0,.58);
+reflGroup.add(reflMain);
+const reflSats=[];
+[[3.5,0,0],[0,3.5,0],[0,0,3.5],[-2,2,0]].forEach(([x,y,z])=>{
+  const s=glowCubePink(.6,.50);
+  s.position.set(x,y,z); reflSats.push(s); reflGroup.add(s);
+});
+[1.8,2.8].forEach((r,i)=>{
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(r,.05,8,80),
+    new THREE.MeshStandardMaterial({color:0xec4899,emissive:0x660033,emissiveIntensity:1.0,transparent:true,opacity:.48})
+  );
+  ring.rotation.x=Math.PI/2+i*.5; reflGroup.add(ring);
+});
+scene.add(reflGroup);
+
+// Mirror plane visual
+const mirrorGeo=new THREE.PlaneGeometry(18,18);
+const mirrorPlane=new THREE.Mesh(mirrorGeo, new THREE.MeshStandardMaterial({
+  color:0xec4899,emissive:0x330022,metalness:.9,roughness:.05,
+  transparent:true,opacity:.14,side:THREE.DoubleSide
+}));
+mirrorPlane.add(new THREE.LineSegments(new THREE.EdgesGeometry(mirrorGeo),
+  new THREE.LineBasicMaterial({color:0xec4899,transparent:true,opacity:.5})));
+scene.add(mirrorPlane);
+
+// Grid lines on mirror plane
+const mgrid=new THREE.GridHelper(18,12,0xec4899,0x661133);
+mgrid.material.transparent=true; mgrid.material.opacity=.3;
+scene.add(mgrid);
+
+const planes={
+  YZ:{reflPos:()=>origGroup.position.clone().multiply(new THREE.Vector3(-1,1,1)),
+      mirrorRot:[0,Math.PI/2,0], mirrorPos:[0,0,0], formula:"P&prime; = M<sub>yz</sub> &middot; P"},
+  XZ:{reflPos:()=>origGroup.position.clone().multiply(new THREE.Vector3(1,-1,1)),
+      mirrorRot:[Math.PI/2,0,0], mirrorPos:[0,0,0], formula:"P&prime; = M<sub>xz</sub> &middot; P"},
+  XY:{reflPos:()=>origGroup.position.clone().multiply(new THREE.Vector3(1,1,-1)),
+      mirrorRot:[0,0,0], mirrorPos:[0,0,0], formula:"P&prime; = M<sub>xy</sub> &middot; P"},
+};
+
+function applyRot(ry,rx){
+  origGroup.rotation.set(rx*D,ry*D,0);
+  // Mirror reflected rotation
+  if(plane==='YZ') reflGroup.rotation.set(rx*D,-ry*D,0);
+  else if(plane==='XZ') reflGroup.rotation.set(-rx*D,ry*D,0);
+  else reflGroup.rotation.set(rx*D,ry*D,0);
+  document.getElementById('hrot').textContent=Math.round(ry)+'°';
+  document.getElementById('rot-v').textContent=Math.round(ry)+'°';
+  document.getElementById('rotx-v').textContent=Math.round(rx)+'°';
+}
+
+window.setPlane=function(p, btn){
+  plane=p;
+  document.querySelectorAll('.btn-plane').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const cfg=planes[p];
+  mirrorPlane.rotation.set(...cfg.mirrorRot);
+  mgrid.rotation.set(...cfg.mirrorRot);
+  document.getElementById('hplane').textContent=p;
+  document.getElementById('refl-formula').innerHTML=cfg.formula;
+  updateReflPos();
+};
+
+function updateReflPos(){
+  const rp=planes[plane].reflPos();
+  reflGroup.position.copy(rp);
+}
+
+['roty','rotx'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  applyRot(+document.getElementById('roty').value,+document.getElementById('rotx').value);
+  updateReflPos();
+}));
+
+window.resetRefl=()=>{
+  document.getElementById('roty').value=0; document.getElementById('rotx').value=-18;
+  applyRot(0,-18); updateReflPos(); spinning=false;
+  document.getElementById('spinBtn').classList.remove('on');
+  document.getElementById('spinBtn').textContent='⏵ Spin';
+};
+
+window.toggleSpin=()=>{
+  spinning=!spinning;
+  const b=document.getElementById('spinBtn');
+  b.classList.toggle('on',spinning); b.textContent=spinning?'⏸ Stop':'⏵ Spin';
+};
+
+// Init
+origGroup.position.set(3.5,0,0);
+updateReflPos();
+applyRot(0,-18);
+mirrorPlane.rotation.set(0,Math.PI/2,0);
+mgrid.rotation.set(0,Math.PI/2,0);
+</script>
+</body>
+</html>

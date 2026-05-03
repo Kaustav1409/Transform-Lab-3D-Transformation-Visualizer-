@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Rotation — 3D Transformation Visualizer</title>
+<link rel="stylesheet" href="ui.css"/>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link">Home</a></li>
+    <li><a href="translation.html" class="nav-link">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link active">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link">Projection</a></li>
+  </ul>
+</nav>
+<div class="info-panel">
+  <div class="page-tag">02 — Rotation</div>
+  <h2 class="page-title">Axis<br/><span class="hl-v">Rotation</span></h2>
+  <p class="page-desc">Rotate the object cluster around X, Y, Z axes. Use Auto Spin for a continuous cinematic rotation through the environment.</p>
+  <div class="formula-chip">P&prime; = Rx &middot; Ry &middot; Rz &middot; P</div>
+</div>
+<div class="hud">
+  <div class="hud-item hud-x"><div class="hud-dot"></div>Rx: <span class="hud-val" id="hx">0°</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-y"><div class="hud-dot"></div>Ry: <span class="hud-val" id="hy">0°</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-z"><div class="hud-dot"></div>Rz: <span class="hud-val" id="hz">0°</span></div>
+</div>
+<div class="controls">
+  <div class="ctrl-head">Rotation</div>
+  <div class="ctrl-row"><span class="ax ax-x">X°</span><input type="range" class="slider sl-x" id="rx" min="-180" max="180" value="0"/><span class="cval" id="rv-x">0°</span></div>
+  <div class="ctrl-row"><span class="ax ax-y">Y°</span><input type="range" class="slider sl-y" id="ry" min="-180" max="180" value="0"/><span class="cval" id="rv-y">0°</span></div>
+  <div class="ctrl-row"><span class="ax ax-z">Z°</span><input type="range" class="slider sl-z" id="rz" min="-180" max="180" value="0"/><span class="cval" id="rv-z">0°</span></div>
+  <div class="btn-row">
+    <button class="btn-r" onclick="resetR()">↺ Reset</button>
+    <button class="btn-a btn-v" id="spinBtn" onclick="toggleSpin()">⏵ Auto Spin</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createScene, glowCube } from './engine.js';
+
+const D=Math.PI/180;
+let spinning=false, spinAngle=0;
+
+const { scene } = createScene(document.getElementById('c'), {
+  accent: 0x7c3aed, gridColor: 0x7c3aed,
+  onTick: (t) => {
+    orbitRings.forEach((r,i)=>{ r.rotation.z+=.007*(i+1)*.5; });
+    sats.forEach((s,i)=>{ s.rotation.x+=.01+i*.002; s.rotation.y+=.008+i*.003; });
+    envOcts.forEach(o=>{ o.rotation.x+=.003; o.rotation.y+=.005; });
+    axHelper.rotation.y+=.002;
+    if(spinning){
+      spinAngle=(spinAngle+.6)%360;
+      const el=document.getElementById('ry');
+      el.value=spinAngle; objGroup.rotation.y=spinAngle*D;
+      updateHUD(+document.getElementById('rx').value, spinAngle, +document.getElementById('rz').value);
+    }
+  }
+});
+
+const objGroup=new THREE.Group();
+
+// Central complex shape: cube + 3 rings
+const mainCube=glowCube(2.2, 0x5500cc, 0x3300aa, 0.65);
+objGroup.add(mainCube);
+
+const orbitRings=[];
+[2,3.2,4.6].forEach((r,i)=>{
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(r,.06,8,90),
+    new THREE.MeshStandardMaterial({color:0xa78bfa,emissive:0x330066,emissiveIntensity:1.4,transparent:true,opacity:.7})
+  );
+  ring.rotation.x=i*(Math.PI/3); orbitRings.push(ring); objGroup.add(ring);
+});
+
+// Satellite cubes
+const sats=[];
+[[4.5,0,0],[-4.5,0,0],[0,0,4.5],[0,0,-4.5],[3,2.5,3],[-3,2,-3],[0,4,0],[0,-3,0]].forEach(([x,y,z])=>{
+  const s=glowCube(.6, 0xa78bfa, 0x220055, .55);
+  s.position.set(x,y,z); sats.push(s); objGroup.add(s);
+});
+
+// Axis lines
+const axHelper=new THREE.Group();
+[[new THREE.Vector3(1,0,0),0xf97316],[new THREE.Vector3(0,1,0),0x22c55e],[new THREE.Vector3(0,0,1),0x60a5fa]].forEach(([dir,col])=>{
+  const pts=[dir.clone().multiplyScalar(-7),dir.clone().multiplyScalar(7)];
+  axHelper.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.55})));
+});
+objGroup.add(axHelper);
+
+// Outer glow sphere
+objGroup.add(new THREE.Mesh(
+  new THREE.SphereGeometry(6,16,8),
+  new THREE.MeshStandardMaterial({color:0x220044,emissive:0x110022,transparent:true,opacity:.08,wireframe:true})
+));
+
+scene.add(objGroup);
+
+// Extra env octahedra (violet theme)
+const envOcts=[];
+for(let i=0;i<10;i++){
+  const m=new THREE.Mesh(
+    new THREE.OctahedronGeometry(.6+Math.random()*.8),
+    new THREE.MeshStandardMaterial({color:0x440088,emissive:0x220044,metalness:.8,roughness:.3,transparent:true,opacity:.3,wireframe:Math.random()>.4})
+  );
+  m.position.set((Math.random()-.5)*22,(Math.random()-.5)*10+1,(Math.random()-.5)*22);
+  scene.add(m); envOcts.push(m);
+}
+
+function updateHUD(x,y,z){
+  document.getElementById('hx').textContent=Math.round(x)+'°';
+  document.getElementById('hy').textContent=Math.round(y)+'°';
+  document.getElementById('hz').textContent=Math.round(z)+'°';
+  document.getElementById('rv-x').textContent=Math.round(x)+'°';
+  document.getElementById('rv-y').textContent=Math.round(y)+'°';
+  document.getElementById('rv-z').textContent=Math.round(z)+'°';
+}
+['rx','ry','rz'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  const rx=+document.getElementById('rx').value,ry=+document.getElementById('ry').value,rz=+document.getElementById('rz').value;
+  objGroup.rotation.set(rx*D,ry*D,rz*D); updateHUD(rx,ry,rz);
+}));
+window.resetR=()=>{ ['rx','ry','rz'].forEach(id=>{document.getElementById(id).value=0;}); objGroup.rotation.set(0,0,0); spinAngle=0; updateHUD(0,0,0); };
+window.toggleSpin=()=>{
+  spinning=!spinning;
+  const b=document.getElementById('spinBtn');
+  b.classList.toggle('on',spinning); b.textContent=spinning?'⏸ Stop':'⏵ Auto Spin';
+};
+</script>
+</body>
+</html>

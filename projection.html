@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Projection — 3D Transformation Visualizer</title>
+<link rel="stylesheet" href="ui.css"/>
+<style>
+canvas{position:fixed;top:0;height:100vh;z-index:0}
+#cl{left:0;width:50vw}
+#cr{left:50vw;width:50vw}
+.split-label{position:fixed;top:66px;z-index:400;background:rgba(5,8,20,.75);backdrop-filter:blur(12px);border:1px solid rgba(249,115,22,.22);border-radius:8px;padding:4px 14px;font-size:.64rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#fb923c}
+#ll{left:10%}#lr{right:10%}
+.dvd{position:fixed;top:0;bottom:0;left:50%;width:1px;background:linear-gradient(to bottom,transparent,rgba(249,115,22,.6) 30%,rgba(249,115,22,.6) 70%,transparent);z-index:300;pointer-events:none}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="cl"></canvas><canvas id="cr"></canvas>
+<div class="dvd"></div>
+<div class="split-label" id="ll">⬡ Perspective</div>
+<div class="split-label" id="lr">⬡ Orthographic</div>
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link">Home</a></li>
+    <li><a href="translation.html" class="nav-link">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link active">Projection</a></li>
+  </ul>
+</nav>
+<div class="info-panel">
+  <div class="page-tag">05 — Projection</div>
+  <h2 class="page-title" style="font-size:1.65rem">3D<br/><span style="background:linear-gradient(135deg,#f97316,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Projection</span></h2>
+  <p class="page-desc"><b style="color:#fb923c">Left</b> — Perspective: far objects shrink.<br/><b style="color:#fbbf24">Right</b> — Orthographic: size stays constant.</p>
+  <div class="formula-chip">x&prime; = x·d/z &nbsp; y&prime; = y·d/z</div>
+</div>
+<div class="hud">
+  <div class="hud-item" style="color:#fb923c"><div class="hud-dot" style="background:#f97316;box-shadow:0 0 6px #f97316"></div>FOV: <span class="hud-val" id="hfov">65°</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-y"><div class="hud-dot"></div>Ry: <span class="hud-val" id="hrot">20°</span></div>
+</div>
+<div class="controls">
+  <div class="ctrl-head">Projection Controls</div>
+  <div class="ctrl-row"><span class="ax" style="background:rgba(249,115,22,.18);color:#f97316;width:28px;font-size:.58rem">FOV</span><input type="range" class="slider sl-u" id="fov" min="20" max="120" value="65"/><span class="cval" id="fov-v">65°</span></div>
+  <div class="ctrl-row"><span class="ax ax-y">Y°</span><input type="range" class="slider sl-y" id="roty" min="0" max="360" value="20"/><span class="cval" id="rot-v">20°</span></div>
+  <div class="ctrl-row"><span class="ax ax-x">X°</span><input type="range" class="slider sl-x" id="rotx" min="-60" max="30" value="-15"/><span class="cval" id="rotx-v">-15°</span></div>
+  <div class="btn-row">
+    <button class="btn-r" onclick="resetProj()">↺ Reset</button>
+    <button class="btn-a" style="border-color:rgba(249,115,22,.35);background:rgba(249,115,22,.12);color:#fb923c" id="spinBtn" onclick="toggleSpin()">⏵ Auto Spin</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const D=Math.PI/180;
+let spinning=false, spinA=20;
+
+// Sizes
+const HW=Math.floor(innerWidth/2), H=innerHeight;
+
+// SCENE (shared)
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x030610);
+scene.fog=new THREE.FogExp2(0x030610,0.014);
+
+// CAMERAS
+const perspCam=new THREE.PerspectiveCamera(65,HW/H,0.1,1000);
+perspCam.position.set(0,6,18); perspCam.lookAt(0,0,0);
+const OS=9, oAsp=HW/H;
+const orthoCam=new THREE.OrthographicCamera(-OS*oAsp,OS*oAsp,OS,-OS,0.1,1000);
+orthoCam.position.set(0,6,18); orthoCam.lookAt(0,0,0);
+
+// RENDERER L (perspective)
+const rendL=new THREE.WebGLRenderer({canvas:document.getElementById('cl'),antialias:true});
+rendL.setSize(HW,H); rendL.setPixelRatio(Math.min(devicePixelRatio,2));
+rendL.toneMapping=THREE.ACESFilmicToneMapping; rendL.toneMappingExposure=1.5;
+
+// RENDERER R (orthographic)
+const rendR=new THREE.WebGLRenderer({canvas:document.getElementById('cr'),antialias:true});
+rendR.setSize(HW,H); rendR.setPixelRatio(Math.min(devicePixelRatio,2));
+rendR.toneMapping=THREE.ACESFilmicToneMapping; rendR.toneMappingExposure=1.5;
+
+// COMPOSERS
+const composerL=new EffectComposer(rendL);
+composerL.addPass(new RenderPass(scene,perspCam));
+composerL.addPass(new UnrealBloomPass(new THREE.Vector2(HW,H),0.9,0.5,0.12));
+
+const composerR=new EffectComposer(rendR);
+composerR.addPass(new RenderPass(scene,orthoCam));
+composerR.addPass(new UnrealBloomPass(new THREE.Vector2(HW,H),0.9,0.5,0.12));
+
+// ORBIT CONTROLS on left canvas; sync ortho to persp
+const controls=new OrbitControls(perspCam,document.getElementById('cl'));
+controls.enableDamping=true; controls.dampingFactor=0.04;
+controls.autoRotate=true; controls.autoRotateSpeed=0.25;
+controls.minDistance=4; controls.maxDistance=80; controls.maxPolarAngle=Math.PI*.82;
+
+// LIGHTS
+scene.add(new THREE.AmbientLight(0x080f28,5));
+const dirL=new THREE.DirectionalLight(0xffffff,1.2); dirL.position.set(10,20,10); scene.add(dirL);
+const lts=[new THREE.PointLight(0xf97316,10,70),new THREE.PointLight(0x7c3aed,6,60),new THREE.PointLight(0xfbbf24,5,55),new THREE.PointLight(0xf97316,4,40)];
+lts[0].position.set(8,10,5); lts[1].position.set(-10,8,-8); lts[2].position.set(0,-3,14); lts[3].position.set(-6,5,8);
+lts.forEach(l=>scene.add(l));
+
+// GRIDS
+const Gc=new THREE.Color(0xf97316).multiplyScalar(0.55);
+const g1=new THREE.GridHelper(240,80,0xf97316,Gc.getHex()); g1.position.y=-5; g1.material.transparent=true; g1.material.opacity=0.55; scene.add(g1);
+const g2=new THREE.GridHelper(600,60,0x0d0400,0x070200); g2.position.y=-5; g2.material.transparent=true; g2.material.opacity=0.28; scene.add(g2);
+
+// FLOOR
+const flr=new THREE.Mesh(new THREE.PlaneGeometry(600,600),new THREE.MeshStandardMaterial({color:0x080300,metalness:.95,roughness:.06,transparent:true,opacity:.75}));
+flr.rotation.x=-Math.PI/2; flr.position.y=-5.02; scene.add(flr);
+
+// PARTICLES
+function mkPts(n,sp,sz,col,op){
+  const pos=new Float32Array(n*3);
+  for(let i=0;i<n*3;i+=3){pos[i]=(Math.random()-.5)*sp;pos[i+1]=(Math.random()-.5)*(sp*.35);pos[i+2]=(Math.random()-.5)*sp;}
+  const p=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(pos,3)),new THREE.PointsMaterial({color:col,size:sz,transparent:true,opacity:op,depthWrite:false}));
+  scene.add(p); return p;
+}
+const p1=mkPts(2000,280,0.14,0xf97316,0.50),p2=mkPts(1000,400,0.07,0xffffff,0.18),p3=mkPts(500,150,0.20,0xf97316,0.15);
+
+// ENVIRONMENT
+const env=[];
+for(let i=0;i<16;i++){
+  const ang=(i/16)*Math.PI*2,r=28+Math.random()*40;
+  const m=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5+Math.random()*3.5,1),new THREE.MeshStandardMaterial({color:0xf97316,wireframe:true,transparent:true,opacity:0.08+Math.random()*.12}));
+  m.position.set(Math.cos(ang)*r,(Math.random()-.5)*20+3,Math.sin(ang)*r);
+  m.userData.ry=(Math.random()-.5)*.004; scene.add(m); env.push(m);
+}
+for(let i=0;i<10;i++){
+  const ang=(i/10)*Math.PI*2+.3,dist=18+Math.random()*25;
+  const t=new THREE.Mesh(new THREE.TorusGeometry(2.5+Math.random()*4,.05,8,90),new THREE.MeshStandardMaterial({color:0xf97316,emissive:0x331100,emissiveIntensity:.5,transparent:true,opacity:.30+Math.random()*.18}));
+  t.position.set(Math.cos(ang)*dist,(Math.random()-.5)*12,Math.sin(ang)*dist);
+  t.userData.ry=(Math.random()-.5)*.006; scene.add(t); env.push(t);
+}
+for(let i=0;i<8;i++){
+  const h=6+Math.random()*10,ang=(i/8)*Math.PI*2+0.4,r=30+Math.random()*22;
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,h,6),new THREE.MeshStandardMaterial({color:0xf97316,emissive:0xf97316,emissiveIntensity:.8,transparent:true,opacity:.35}));
+  m.position.set(Math.cos(ang)*r,-5+h/2,Math.sin(ang)*r); scene.add(m);
+}
+
+// OBJECT CLUSTER
+function glowCube(sz,col,em,op=.7){
+  const g=new THREE.Group();const geo=new THREE.BoxGeometry(sz,sz,sz);
+  g.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:col,emissive:em,emissiveIntensity:1,metalness:.5,roughness:.3,transparent:true,opacity:op})));
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.95})));
+  return g;
+}
+const objGroup=new THREE.Group();
+const mainCube=glowCube(2.2,0xcc5500,0x441100,.70);
+objGroup.add(mainCube);
+[[3.5,0,0],[-3.5,0,0],[0,0,3.5],[0,0,-3.5],[0,3,0],[2.5,2,2.5]].forEach(([x,y,z])=>{
+  const s=glowCube(.65,0xfb923c,0x441100,.55); s.position.set(x,y,z); s.userData.sat=true; objGroup.add(s);
+});
+[2,3.5].forEach((r,i)=>{
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.05,8,80),new THREE.MeshStandardMaterial({color:0xfb923c,emissive:0x331100,emissiveIntensity:1.2,transparent:true,opacity:.60}));
+  ring.rotation.x=Math.PI/2+i*.5; ring.userData.ri=i; objGroup.add(ring);
+});
+scene.add(objGroup);
+objGroup.rotation.set(-15*D,20*D,0);
+
+// RESIZE
+window.addEventListener('resize',()=>{
+  const hw=Math.floor(innerWidth/2),h=innerHeight;
+  rendL.setSize(hw,h); rendR.setSize(hw,h);
+  composerL.setSize(hw,h); composerR.setSize(hw,h);
+  perspCam.aspect=hw/h; perspCam.updateProjectionMatrix();
+  const a=hw/h; orthoCam.left=-OS*a; orthoCam.right=OS*a; orthoCam.updateProjectionMatrix();
+});
+
+// ANIMATE
+let t=0;
+function animate(){
+  requestAnimationFrame(animate); t+=.005;
+  env.forEach(o=>{o.rotation.y+=o.userData.ry||0; o.rotation.x+=(o.userData.ry||0)*.7;});
+  objGroup.children.forEach(c=>{if(c.userData.sat){c.rotation.x+=.01;c.rotation.y+=.008;}if(c.userData.ri!==undefined)c.rotation.z+=.006*(c.userData.ri+1)*.5;});
+  mainCube.children[0].rotation.y+=.003;
+  p1.rotation.y+=.00018; p2.rotation.y-=.0001; p3.rotation.x+=.00008;
+  lts[0].position.set(Math.sin(t*.5)*18,10,Math.cos(t*.3)*16);
+  lts[1].position.set(Math.cos(t*.4)*16,8,Math.sin(t*.6)*14);
+  if(spinning){spinA=(spinA+.4)%360; document.getElementById('roty').value=spinA; applyRot(spinA,+document.getElementById('rotx').value);}
+  controls.update();
+  orthoCam.position.copy(perspCam.position);
+  orthoCam.lookAt(controls.target);
+  composerL.render(); composerR.render();
+}
+animate();
+
+function applyRot(ry,rx){
+  objGroup.rotation.set(rx*D,ry*D,0);
+  document.getElementById('hrot').textContent=Math.round(ry)+'°';
+  document.getElementById('rot-v').textContent=Math.round(ry)+'°';
+  document.getElementById('rotx-v').textContent=Math.round(rx)+'°';
+}
+document.getElementById('fov').addEventListener('input',function(){
+  perspCam.fov=+this.value; perspCam.updateProjectionMatrix();
+  document.getElementById('hfov').textContent=this.value+'°';
+  document.getElementById('fov-v').textContent=this.value+'°';
+});
+['roty','rotx'].forEach(id=>document.getElementById(id).addEventListener('input',()=>applyRot(+document.getElementById('roty').value,+document.getElementById('rotx').value)));
+window.resetProj=()=>{
+  perspCam.fov=65; perspCam.updateProjectionMatrix();
+  document.getElementById('fov').value=65; document.getElementById('fov-v').textContent='65°'; document.getElementById('hfov').textContent='65°';
+  document.getElementById('roty').value=20; document.getElementById('rotx').value=-15;
+  applyRot(20,-15); spinning=false;
+  document.getElementById('spinBtn').classList.remove('on'); document.getElementById('spinBtn').textContent='⏵ Auto Spin';
+};
+window.toggleSpin=()=>{
+  spinning=!spinning;
+  const b=document.getElementById('spinBtn');
+  b.classList.toggle('on',spinning); b.textContent=spinning?'⏸ Stop':'⏵ Auto Spin';
+};
+</script>
+</body>
+</html>

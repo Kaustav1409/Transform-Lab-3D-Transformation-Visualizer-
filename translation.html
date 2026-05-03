@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Translation — 3D Transformation Visualizer</title>
+<link rel="stylesheet" href="ui.css"/>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link">Home</a></li>
+    <li><a href="translation.html" class="nav-link active">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link">Projection</a></li>
+  </ul>
+</nav>
+<div class="info-panel">
+  <div class="page-tag">01 — Translation</div>
+  <h2 class="page-title">Spatial<br/><span class="hl">Translation</span></h2>
+  <p class="page-desc">Move the object cluster through the immersive 3D environment along X, Y, Z axes. Hit Animate to see cinematic movement through space.</p>
+  <div class="formula-chip">P&prime; = T &middot; P</div>
+</div>
+<div class="hud">
+  <div class="hud-item hud-x"><div class="hud-dot"></div>X: <span class="hud-val" id="hx">0.0</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-y"><div class="hud-dot"></div>Y: <span class="hud-val" id="hy">0.0</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-z"><div class="hud-dot"></div>Z: <span class="hud-val" id="hz">0.0</span></div>
+</div>
+<div class="controls">
+  <div class="ctrl-head">Translation</div>
+  <div class="ctrl-row"><span class="ax ax-x">X</span><input type="range" class="slider sl-x" id="tx" min="-8" max="8" value="0" step="0.1"/><span class="cval" id="tv-x">0.0</span></div>
+  <div class="ctrl-row"><span class="ax ax-y">Y</span><input type="range" class="slider sl-y" id="ty" min="-4" max="4" value="0" step="0.1"/><span class="cval" id="tv-y">0.0</span></div>
+  <div class="ctrl-row"><span class="ax ax-z">Z</span><input type="range" class="slider sl-z" id="tz" min="-8" max="8" value="0" step="0.1"/><span class="cval" id="tv-z">0.0</span></div>
+  <div class="btn-row">
+    <button class="btn-r" onclick="resetT()">↺ Reset</button>
+    <button class="btn-a" id="animBtn" onclick="toggleAnim()">⏵ Animate</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createScene, glowCube } from './engine.js';
+
+let animating=false, animT=0;
+const { scene, controls } = createScene(document.getElementById('c'), {
+  accent: 0x00e5ff, gridColor: 0x00e5ff,
+  onTick: (t) => {
+    // Satellite self-rotation
+    sats.forEach((s,i)=>{ s.rotation.x+=.009+i*.002; s.rotation.y+=.011+i*.003; });
+    rings.forEach((r,i)=>{ r.rotation.z+=.005*(i+1)*.5; });
+    mainCube.children[0].rotation.y+=.003;
+    // Trail pulse
+    trail.material.opacity = 0.18+Math.sin(t*3)*.08;
+    // Animate mode
+    if(animating){
+      animT+=.018;
+      const ax=Math.sin(animT)*7, ay=Math.sin(animT*.7)*3, az=Math.cos(animT*.8)*6;
+      objGroup.position.set(ax,ay,az);
+      document.getElementById('tx').value=ax;
+      document.getElementById('ty').value=ay;
+      document.getElementById('tz').value=az;
+      updateHUD(ax,ay,az);
+    }
+  }
+});
+
+// MAIN CLUSTER
+const objGroup = new THREE.Group();
+const mainCube = glowCube(2.4, 0x0088ff, 0x0044aa, 0.70);
+objGroup.add(mainCube);
+
+// Satellite cubes
+const sats=[];
+[[4,0.5,0],[-4,0.5,0],[0,0.5,4],[0,0.5,-4],[2.8,2,2.8],[-2.8,1.5,-2],[0,-2,2]].forEach(([x,y,z])=>{
+  const s=glowCube(.65+Math.random()*.3, 0x00e5ff, 0x003355, .55);
+  s.position.set(x,y,z); sats.push(s); objGroup.add(s);
+});
+
+// Orbit rings
+const rings=[];
+[2,3.2,4.5].forEach((r,i)=>{
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(r,.05,8,90),
+    new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x004466,emissiveIntensity:1.2,transparent:true,opacity:.55})
+  );
+  ring.rotation.x=Math.PI/2+i*.45; rings.push(ring); objGroup.add(ring);
+});
+
+// Motion trail
+const trailGeo=new THREE.SphereGeometry(3.5,16,8);
+const trail=new THREE.Mesh(trailGeo, new THREE.MeshStandardMaterial({color:0x00e5ff,emissive:0x001133,transparent:true,opacity:.18,wireframe:true}));
+objGroup.add(trail);
+
+scene.add(objGroup);
+
+function updateHUD(x,y,z){
+  document.getElementById('hx').textContent=x.toFixed(1);
+  document.getElementById('hy').textContent=y.toFixed(1);
+  document.getElementById('hz').textContent=z.toFixed(1);
+  document.getElementById('tv-x').textContent=x.toFixed(1);
+  document.getElementById('tv-y').textContent=y.toFixed(1);
+  document.getElementById('tv-z').textContent=z.toFixed(1);
+}
+['tx','ty','tz'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  const x=+document.getElementById('tx').value,y=+document.getElementById('ty').value,z=+document.getElementById('tz').value;
+  objGroup.position.set(x,y,z); updateHUD(x,y,z);
+}));
+window.resetT=()=>{ ['tx','ty','tz'].forEach(id=>{document.getElementById(id).value=0;}); objGroup.position.set(0,0,0); animT=0; updateHUD(0,0,0); };
+window.toggleAnim=()=>{
+  animating=!animating;
+  const b=document.getElementById('animBtn');
+  b.classList.toggle('on',animating); b.textContent=animating?'⏸ Stop':'⏵ Animate';
+};
+</script>
+</body>
+</html>

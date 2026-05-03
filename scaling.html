@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Scaling — 3D Transformation Visualizer</title>
+<link rel="stylesheet" href="ui.css"/>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<nav class="navbar">
+  <a href="index.html" class="nav-brand"><div class="nav-cube"></div>Transform<span class="brand-accent">Lab</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="nav-link">Home</a></li>
+    <li><a href="translation.html" class="nav-link">Translation</a></li>
+    <li><a href="rotation.html" class="nav-link">Rotation</a></li>
+    <li><a href="scaling.html" class="nav-link active">Scaling</a></li>
+    <li><a href="reflection.html" class="nav-link">Reflection</a></li>
+    <li><a href="projection.html" class="nav-link">Projection</a></li>
+  </ul>
+</nav>
+<div class="info-panel">
+  <div class="page-tag">03 — Scaling</div>
+  <h2 class="page-title">Object<br/><span class="hl-g">Scaling</span></h2>
+  <p class="page-desc">Resize the object uniformly or per-axis. Use Pulse to see the environment breathe and expand as space stretches around you.</p>
+  <div class="formula-chip">P&prime; = S &middot; P</div>
+</div>
+<div class="hud">
+  <div class="hud-item hud-x"><div class="hud-dot"></div>Sx: <span class="hud-val" id="hx">1.00×</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-y"><div class="hud-dot"></div>Sy: <span class="hud-val" id="hy">1.00×</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-item hud-z"><div class="hud-dot"></div>Sz: <span class="hud-val" id="hz">1.00×</span></div>
+</div>
+<div class="controls">
+  <div class="ctrl-head">Scaling</div>
+  <div class="ctrl-row"><span class="ax ax-u">U</span><input type="range" class="slider sl-u" id="su" min="0.1" max="3" value="1" step="0.05"/><span class="cval" id="sv-u">1.00×</span></div>
+  <div class="ctrl-row"><span class="ax ax-x">X</span><input type="range" class="slider sl-x" id="sx" min="0.1" max="3" value="1" step="0.05"/><span class="cval" id="sv-x">1.00×</span></div>
+  <div class="ctrl-row"><span class="ax ax-y">Y</span><input type="range" class="slider sl-y" id="sy" min="0.1" max="3" value="1" step="0.05"/><span class="cval" id="sv-y">1.00×</span></div>
+  <div class="ctrl-row"><span class="ax ax-z">Z</span><input type="range" class="slider sl-z" id="sz" min="0.1" max="3" value="1" step="0.05"/><span class="cval" id="sv-z">1.00×</span></div>
+  <div class="btn-row">
+    <button class="btn-r" onclick="resetS()">↺ Reset</button>
+    <button class="btn-a btn-g" id="pulseBtn" onclick="togglePulse()">⏵ Pulse</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createScene, glowCube } from './engine.js';
+
+let pulsing=false, pulseT=0;
+
+const { scene } = createScene(document.getElementById('c'), {
+  accent: 0x22c55e, gridColor: 0x22c55e,
+  onTick: (t) => {
+    haloRings.forEach((r,i)=>{ r.rotation.y+=.005*(i+1)*.6; r.rotation.z+=.003*(i+1)*.4; });
+    sats.forEach((s,i)=>{ s.rotation.x+=.012+i*.002; s.rotation.y+=.009+i*.003; });
+    // Pulse mode
+    if(pulsing){
+      pulseT+=.022;
+      const s=1+Math.sin(pulseT)*.85;
+      objGroup.scale.set(s,s,s);
+      ['sx','sy','sz','su'].forEach(id=>{document.getElementById(id).value=s;});
+      document.getElementById('sv-u').textContent=s.toFixed(2)+'×';
+      updateHUD(s,s,s);
+    }
+  }
+});
+
+const objGroup=new THREE.Group();
+const mainCube=glowCube(2.2, 0x00aa44, 0x004422, 0.68);
+objGroup.add(mainCube);
+
+// Expanding halo rings
+const haloRings=[];
+[2.4,3.6,5.0,6.5].forEach((r,i)=>{
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(r,.05,8,90),
+    new THREE.MeshStandardMaterial({color:0x22c55e,emissive:0x004422,emissiveIntensity:1.3,transparent:true,opacity:.60-(i*.10)})
+  );
+  ring.rotation.x=i*(Math.PI/4); haloRings.push(ring); objGroup.add(ring);
+});
+
+// Satellite nodes
+const sats=[];
+[[4,0,0],[-4,0,0],[0,0,4],[0,0,-4],[0,4,0],[0,-3,0],[2.8,2.8,0],[0,2.8,2.8]].forEach(([x,y,z])=>{
+  const s=glowCube(.55, 0x44ff88, 0x003322, .55);
+  s.position.set(x,y,z); sats.push(s); objGroup.add(s);
+});
+
+// Scale reference frame — thin wireframe sphere
+objGroup.add(new THREE.Mesh(
+  new THREE.SphereGeometry(5.5,12,8),
+  new THREE.MeshStandardMaterial({color:0x22c55e,emissive:0x112211,transparent:true,opacity:.06,wireframe:true})
+));
+
+scene.add(objGroup);
+
+// Extra env: large wireframe spheres
+for(let i=0;i<6;i++){
+  const m=new THREE.Mesh(
+    new THREE.SphereGeometry(3+Math.random()*4,8,8),
+    new THREE.MeshStandardMaterial({color:0x003310,emissive:0x001108,wireframe:true,transparent:true,opacity:.15})
+  );
+  m.position.set((Math.random()-.5)*40,(Math.random()-.5)*18,(Math.random()-.5)*40);
+  scene.add(m);
+}
+
+function updateHUD(x,y,z){
+  document.getElementById('hx').textContent=x.toFixed(2)+'×';
+  document.getElementById('hy').textContent=y.toFixed(2)+'×';
+  document.getElementById('hz').textContent=z.toFixed(2)+'×';
+  document.getElementById('sv-x').textContent=x.toFixed(2)+'×';
+  document.getElementById('sv-y').textContent=y.toFixed(2)+'×';
+  document.getElementById('sv-z').textContent=z.toFixed(2)+'×';
+}
+document.getElementById('su').addEventListener('input',function(){
+  const v=+this.value;
+  ['sx','sy','sz'].forEach(id=>{document.getElementById(id).value=v;});
+  this.nextElementSibling.textContent=v.toFixed(2)+'×';
+  objGroup.scale.set(v,v,v); updateHUD(v,v,v);
+});
+['sx','sy','sz'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  const x=+document.getElementById('sx').value,y=+document.getElementById('sy').value,z=+document.getElementById('sz').value;
+  objGroup.scale.set(x,y,z); document.getElementById('sv-u').textContent='—'; updateHUD(x,y,z);
+}));
+window.resetS=()=>{
+  ['su','sx','sy','sz'].forEach(id=>{document.getElementById(id).value=1;});
+  ['sv-u','sv-x','sv-y','sv-z'].forEach(id=>{document.getElementById(id).textContent='1.00×';});
+  objGroup.scale.set(1,1,1); pulseT=0; updateHUD(1,1,1);
+};
+window.togglePulse=()=>{
+  pulsing=!pulsing;
+  const b=document.getElementById('pulseBtn');
+  b.classList.toggle('on',pulsing); b.textContent=pulsing?'⏸ Stop':'⏵ Pulse';
+};
+</script>
+</body>
+</html>
